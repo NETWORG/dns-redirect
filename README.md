@@ -1,0 +1,1 @@
+DNS redirector based on TXT records. More information in our internal [wiki](https://dev.azure.com/thenetworg/Wiki/_wiki/wikis/Wiki.wiki/2047/DNS-Redirector).
