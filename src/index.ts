@@ -97,7 +97,7 @@ async function getRedirectUrl(domain: string, path: string) {
 		if (data.startsWith("REDIRECT::") || data.startsWith("SL::REDIRECT::")) {
 			data = data.replace("SL::REDIRECT::", "").replace("REDIRECT::", "");
 			if (data.startsWith("KEEP_PATH::")) {
-				data += path;
+				data = data.replace("KEEP_PATH::", "") + path;
 			}
 			return {
 				location: data,
