@@ -30,6 +30,19 @@ export interface Env {
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
+		
+		// Redirect HTTP to HTTPS
+		if (url.protocol === "http:") {
+			url.protocol = "https:";
+			return new Response(null, {
+				status: 301,
+				headers: {
+					"Location": url.toString(),
+					"Source": "cf-worker",
+				},
+			});
+		}
+		
 		const host = url.host;
 		const redirect = await getRedirectUrl(host, url.pathname) ?? await getRedirectUrl(`redirect.${host}`, url.pathname);
 		if (!redirect) {
