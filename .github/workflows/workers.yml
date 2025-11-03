@@ -14,14 +14,14 @@ jobs:
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v3
       with:
-        node-version: 16.x
+        node-version: 20.x
 
     - name: Build
       run: |
         npm install
 
     - name: Deploy to Cloudflare Workers with Wrangler
-      uses: cloudflare/wrangler-action@v3.1.0
+      uses: cloudflare/wrangler-action@v3.14.1
       with:
         apiToken: ${{ secrets.CF_API_TOKEN }}
         accountId: ${{ secrets.CF_ACCOUNT_ID }}
