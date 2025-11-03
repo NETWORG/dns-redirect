@@ -32,7 +32,7 @@ export default {
 		const url = new URL(request.url);
 		
 		// Redirect HTTP to HTTPS
-		if (url.protocol === "http:" && url.port === "80") {
+		if (url.protocol === "http:" && url.port === "") {
 			url.protocol = "https:";
 			return new Response(null, {
 				status: 301,
