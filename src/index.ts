@@ -39,6 +39,7 @@ export default {
 				headers: {
 					"Location": url.toString(),
 					"Source": "cf-worker",
+          "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
 				},
 			});
 		}
@@ -64,7 +65,8 @@ export default {
 			headers: {
 				"Location": redirect.location,
 				"Expires": new Date(Date.now() + (redirect.ttl * 1000)).toUTCString(),
-				"Source": "cf-worker"
+				"Source": "cf-worker",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
 			}
 		});
 	},
