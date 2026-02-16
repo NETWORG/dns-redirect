@@ -73,14 +73,14 @@ export default {
 };
 
 async function getDnsTxt(domain: string) {
-	const result = await fetch(`https://1.1.1.1/dns-query?name=${domain}&type=TXT`, {
+	const result = await fetch(`https://cloudflare-dns.com/dns-query?name=${domain}&type=TXT`, {
 		method: "GET",
 		headers: {
 			"Accept": "application/dns-json"
 		}
 	});
 	if (!result.ok) {
-		throw new Error(`Request failed with ${result.status}}`);
+		throw new Error(`Request failed with ${result.status}}: ` + await result.text());
 	}
 	const body = await result.json() as any;
 
