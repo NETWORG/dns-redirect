@@ -61,7 +61,7 @@ export default {
 		}
 
 		return new Response(null, {
-			status: 301,
+			status: 302,
 			headers: {
 				"Location": redirect.location,
 				"Expires": new Date(Date.now() + (redirect.ttl * 1000)).toUTCString(),
