@@ -20,6 +20,7 @@ interface CachePolicy {
 	maxAge: number;
 	staleWhileRevalidate?: number;
 	immutable?: boolean;
+	vary?: string[];
 }
 
 interface DnsTxtRecord {
@@ -74,6 +75,7 @@ export default {
 					{
 						maxAge: HTTPS_REDIRECT_TTL,
 						immutable: true,
+						vary: ["Host"],
 					},
 				),
 			});
@@ -95,6 +97,7 @@ export default {
 					},
 					{
 						maxAge: NOT_FOUND_TTL,
+						vary: ["Host"],
 					},
 				),
 			});
@@ -109,6 +112,7 @@ export default {
 				{
 					maxAge: redirect.ttl,
 					staleWhileRevalidate: REDIRECT_STALE_WHILE_REVALIDATE,
+					vary: ["Host"],
 				},
 			),
 		});
@@ -183,9 +187,24 @@ function createHeaders(headers: HeadersInit, cachePolicy?: CachePolicy): Headers
 	if (cachePolicy) {
 		responseHeaders.set("Cache-Control", buildCacheControl(cachePolicy));
 		responseHeaders.set("Expires", new Date(Date.now() + (cachePolicy.maxAge * 1000)).toUTCString());
+		appendVaryHeaders(responseHeaders, cachePolicy.vary);
 	}
 
 	return responseHeaders;
+}
+
+function appendVaryHeaders(headers: Headers, varyValues?: string[]): void {
+	if (!varyValues || varyValues.length === 0) {
+		return;
+	}
+
+	const existingValues = headers
+		.get("Vary")
+		?.split(",")
+		.map((value) => value.trim())
+		.filter((value) => value.length > 0) ?? [];
+	const nextValues = new Set([...existingValues, ...varyValues]);
+	headers.set("Vary", Array.from(nextValues).join(", "));
 }
 
 function createNoStoreHeaders(headers?: HeadersInit): Headers {
