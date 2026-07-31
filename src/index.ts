@@ -15,6 +15,8 @@ const REDIRECT_STALE_WHILE_REVALIDATE = 300;
 const HSTS_HEADER = "max-age=31536000; includeSubDomains; preload";
 const PURGE_PATH = "/internal/cache/purge";
 const PURGE_TOKEN_HEADER = "X-Purge-Token";
+const REDIRECT_CACHE_NAMESPACE = "redirect-resolution-v1";
+const REDIRECT_CACHE_HOST = "redirect-cache.internal";
 
 interface CachePolicy {
 	maxAge: number;
@@ -35,6 +37,12 @@ interface DnsJsonResponse {
 interface RedirectTarget {
 	location: string;
 	ttl: number;
+}
+
+interface RedirectDefinition {
+	location: string;
+	ttl: number;
+	keepPath: boolean;
 }
 
 export interface Env {
@@ -82,7 +90,7 @@ export default {
 		}
 
 		const host = url.host;
-		const redirect = await getRedirectUrl(host, url.pathname) ?? await getRedirectUrl(`redirect.${host}`, url.pathname);
+		const redirect = await getRedirectUrl(host, url.pathname, ctx) ?? await getRedirectUrl(`redirect.${host}`, url.pathname, ctx);
 		if (!redirect) {
 			return new Response(`<!DOCTYPE html>
       <body>
@@ -255,26 +263,96 @@ async function getDnsTxt(domain: string): Promise<DnsTxtRecord[]> {
 	return body.Answer ?? [];
 }
 
-async function getRedirectUrl(domain: string, path: string): Promise<RedirectTarget | null> {
-	const txtRecords = await getDnsTxt(domain);
-	if (txtRecords.length === 0) {
+async function getRedirectUrl(domain: string, path: string, ctx: ExecutionContext): Promise<RedirectTarget | null> {
+	const redirectDefinition = await getRedirectDefinition(domain, ctx);
+	if (!redirectDefinition) {
 		return null;
 	}
 
+	return createRedirectTarget(redirectDefinition, path);
+}
+
+async function getRedirectDefinition(domain: string, ctx: ExecutionContext): Promise<RedirectDefinition | null> {
+	const cachedRedirectDefinition = await getCachedRedirectDefinition(domain);
+	if (cachedRedirectDefinition !== undefined) {
+		return cachedRedirectDefinition;
+	}
+
+	const redirectDefinition = parseRedirectDefinition(await getDnsTxt(domain));
+	const cacheTtl = redirectDefinition?.ttl ?? NOT_FOUND_TTL;
+	ctx.waitUntil(cacheRedirectDefinition(domain, redirectDefinition, cacheTtl));
+
+	return redirectDefinition;
+}
+
+async function getCachedRedirectDefinition(domain: string): Promise<RedirectDefinition | null | undefined> {
+	const cachedResponse = await caches.default.match(createRedirectCacheKey(domain));
+	if (!cachedResponse) {
+		return undefined;
+	}
+
+	const cachedBody = await cachedResponse.json<CachedRedirectDefinition>();
+	return cachedBody.redirect;
+}
+
+async function cacheRedirectDefinition(domain: string, redirectDefinition: RedirectDefinition | null, ttl: number): Promise<void> {
+	const headers = createHeaders(
+		{
+			"Content-Type": "application/json; charset=UTF-8",
+		},
+		{
+			maxAge: ttl,
+		},
+	);
+	const response = new Response(JSON.stringify({ redirect: redirectDefinition } satisfies CachedRedirectDefinition), {
+		headers,
+	});
+
+	await caches.default.put(createRedirectCacheKey(domain), response);
+}
+
+function createRedirectCacheKey(domain: string): Request {
+	const normalizedDomain = encodeURIComponent(domain.toLowerCase());
+	return new Request(`https://${REDIRECT_CACHE_HOST}/${REDIRECT_CACHE_NAMESPACE}/${normalizedDomain}`);
+}
+
+interface CachedRedirectDefinition {
+	redirect: RedirectDefinition | null;
+}
+
+export function parseRedirectDefinition(txtRecords: DnsTxtRecord[]): RedirectDefinition | null {
 	for (const record of txtRecords) {
-		// TXT records start and end with double quotes (")
-		let data = record.data.slice(1, -1);
-		if (data.startsWith("REDIRECT::") || data.startsWith("SL::REDIRECT::")) {
-			data = data.replace("SL::REDIRECT::", "").replace("REDIRECT::", "");
-			if (data.startsWith("KEEP_PATH::")) {
-				data = data.replace("KEEP_PATH::", "") + path;
-			}
-			return {
-				location: data,
-				ttl: record.TTL < MINIMUM_TTL ? MINIMUM_TTL : record.TTL,
-			};
+		const data = normalizeTxtRecordData(record.data);
+		if (!data.startsWith("REDIRECT::") && !data.startsWith("SL::REDIRECT::")) {
+			continue;
 		}
+
+		let location = data.replace("SL::REDIRECT::", "").replace("REDIRECT::", "");
+		let keepPath = false;
+		if (location.startsWith("KEEP_PATH::")) {
+			location = location.replace("KEEP_PATH::", "");
+			keepPath = true;
+		}
+
+		return {
+			location,
+			ttl: Math.max(record.TTL, MINIMUM_TTL),
+			keepPath,
+		};
 	}
 
 	return null;
+}
+
+function normalizeTxtRecordData(data: string): string {
+	return data.startsWith("\"") && data.endsWith("\"")
+		? data.slice(1, -1)
+		: data;
+}
+
+export function createRedirectTarget(redirectDefinition: RedirectDefinition, path: string): RedirectTarget {
+	return {
+		location: redirectDefinition.keepPath ? redirectDefinition.location + path : redirectDefinition.location,
+		ttl: redirectDefinition.ttl,
+	};
 }

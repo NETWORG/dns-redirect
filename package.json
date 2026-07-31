@@ -2,7 +2,11 @@
   "name": "green-queen-92dc",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/index.test.mjs",
+    "validate": "npm run typecheck && npm test",
     "deploy": "wrangler deploy",
     "start": "wrangler dev"
   },
